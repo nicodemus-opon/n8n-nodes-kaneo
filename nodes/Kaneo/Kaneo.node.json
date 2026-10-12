@@ -1,0 +1,19 @@
+{
+	"node": "n8n-nodes-kaneo.kaneo",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Productivity"],
+	"alias": ["kaneo", "kaneo.app", "kanban", "task management"],
+	"resources": {
+		"credentialDocumentation": [
+			{
+				"url": "https://kaneo.app/docs"
+			}
+		],
+		"primaryDocumentation": [
+			{
+				"url": "https://kaneo.app/docs"
+			}
+		]
+	}
+}
