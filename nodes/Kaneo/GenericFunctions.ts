@@ -61,10 +61,10 @@ export async function kaneoApiRequest(
 	const requestOptions: IHttpRequestOptions = {
 		method,
 		url: buildApiUrl(credentials.baseUrl, path),
-		headers: {
-			Authorization: `Bearer ${credentials.apiKey}`,
-			...(options.headers ?? {}),
-		},
+		// Auth is injected by the kaneoApi credential (generic Bearer auth).
+		// Do not set Authorization here: httpRequestWithAuthentication would send
+		// it twice and some gateways treat duplicate auth headers as forbidden.
+		headers: { ...(options.headers ?? {}) },
 		qs: options.qs,
 		returnFullResponse: options.returnFullResponse ?? false,
 	};
@@ -123,11 +123,61 @@ type ApiErrorShape = {
 	missingPermissions?: string[];
 };
 
-function mapApiErrorMessage(error: unknown): string | undefined {
-	const responseData = (error as { response?: { data?: unknown } })?.response?.data as
-		| ApiErrorShape
-		| undefined;
-	if (!responseData) return undefined;
+export function mapApiErrorMessage(error: unknown): string | undefined {
+	// n8n surfaces HTTP failures in several shapes depending on version:
+	// axios-style { response: { data } }, n8n { response: { body } },
+	// { errorBody }, or a JSON string in { description }. Check them all so
+	// API codes like FORBIDDEN are never swallowed into a generic message.
+	const err = (error ?? {}) as Record<string, unknown>;
+	const candidates: unknown[] = [
+		(err.response as Record<string, unknown> | undefined)?.data,
+		(err.response as Record<string, unknown> | undefined)?.body,
+		err.errorBody,
+		err.description,
+	];
+	let responseData: ApiErrorShape | undefined;
+	let rawSnippet: string | undefined;
+	for (const candidate of candidates) {
+		if (typeof candidate === 'string') {
+			try {
+				const parsed = JSON.parse(candidate) as ApiErrorShape;
+				if (parsed && (parsed.code || parsed.message)) {
+					responseData = parsed;
+					break;
+				}
+			} catch {
+				// Non-JSON body (e.g. Cloudflare HTML challenge). Keep a snippet
+				// so the caller can tell a proxy block from a Kaneo JSON error.
+				const snippet = candidate.replace(/\s+/g, ' ').trim().slice(0, 160);
+				if (snippet && !rawSnippet) rawSnippet = snippet;
+				continue;
+			}
+		} else if (candidate && typeof candidate === 'object') {
+			const shaped = candidate as ApiErrorShape;
+			if (shaped.code || shaped.message || shaped.issues || shaped.missingPermissions) {
+				responseData = shaped;
+				break;
+			}
+		}
+	}
+	const statusCode =
+		(err.statusCode as number | undefined) ??
+		((err.response as Record<string, unknown> | undefined)?.statusCode as number | undefined) ??
+		(err.httpCode as number | undefined);
+	if (!responseData) {
+		if (statusCode === 403) {
+			const extra = rawSnippet ? ` Server said: "${rawSnippet}".` : '';
+			const proxyHint = rawSnippet && /cloudflare|attention required|captcha|challenge/i.test(rawSnippet)
+				? ' This looks like a Cloudflare/proxy block page, not a Kaneo error: allowlist your n8n IP/UA.'
+				: '';
+			return (
+				`FORBIDDEN (HTTP 403). If this is Project > Get Public Board, the project must be public (Is Public).` +
+				` Otherwise the API key lacks permission for this workspace/project, or a proxy blocked the request.` +
+				` Verify Base URL, key, and project/workspace IDs.${extra}${proxyHint}`
+			);
+		}
+		return undefined;
+	}
 	const parts: string[] = [];
 	const code = responseData.code;
 	if (code) parts.push(code);
@@ -139,6 +189,9 @@ function mapApiErrorMessage(error: unknown): string | undefined {
 		API_KEY_SCOPE: 'The API key scope does not allow this route (see missingPermissions).',
 		NOT_FOUND: 'The resource does not exist or is outside this API key’s workspace access.',
 		UNAUTHORIZED: 'Missing or invalid API key.',
+		FORBIDDEN:
+			'Access denied. For Project > Get Public Board the project must be public (Is Public); otherwise the API key lacks permission for this workspace/project.',
+		BAD_REQUEST: 'The request was rejected. A required ID or field may be missing or malformed.',
 	};
 
 	const detail: string[] = [];

@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-kaneo",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "n8n community node for Kaneo (kaneo.app) – projects, tasks, columns, labels, comments, time tracking, and more.",
   "license": "MIT",
   "engines": {

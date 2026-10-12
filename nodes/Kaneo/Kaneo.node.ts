@@ -57,7 +57,14 @@ async function executeProject(
 	switch (operation) {
 		case 'list': {
 			const includeArchived = get('includeArchived', false) as boolean;
-			const qs: IDataObject = { workspaceId: id('workspaceId') as string };
+			const workspaceId = id('workspaceId') as string;
+			if (!workspaceId) {
+				throw new NodeOperationError(
+					context.getNode(),
+					'Select a Workspace to list its projects (Workspace > List shows available IDs). The Kaneo API rejects /project without a workspaceId.',
+				);
+			}
+			const qs: IDataObject = { workspaceId };
 			if (includeArchived) qs.includeArchived = 'true';
 			push(returnData, await kaneoApiRequest(context, 'GET', '/project', { qs }), itemIndex);
 			break;
@@ -120,10 +127,14 @@ async function executeProject(
 			if (!Array.isArray(projects) || projects.length === 0) {
 				throw new NodeOperationError(context.getNode(), 'Projects (JSON) must be a non-empty array of { id, position }.');
 			}
+			const reorderWorkspaceId = id('workspaceId') as string;
+			if (!reorderWorkspaceId) {
+				throw new NodeOperationError(context.getNode(), 'Select a Workspace to reorder its projects.');
+			}
 			push(
 				returnData,
 				await kaneoApiRequest(context, 'PUT', '/project/reorder', {
-					qs: { workspaceId: id('workspaceId') as string } as IDataObject,
+					qs: { workspaceId: reorderWorkspaceId } as IDataObject,
 					body: { projects } as IDataObject,
 				}),
 				itemIndex,

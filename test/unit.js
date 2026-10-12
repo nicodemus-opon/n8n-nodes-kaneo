@@ -81,7 +81,9 @@ function mockRun(NodeClass, { params, calls, httpImpl, items }) {
 		});
 		assert.strictEqual(calls[0].url, 'https://cloud.kaneo.app/api/project');
 		assert.deepStrictEqual(calls[0].qs, { workspaceId: 'w1', includeArchived: 'true' });
-		assert.ok(/^Bearer /.test(calls[0].headers.Authorization), 'bearer auth header');
+		// Auth is injected by the kaneoApi credential (httpRequestWithAuthentication),
+		// so no manual Authorization header must be sent (avoids duplicates).
+		assert.ok(!calls[0].headers || !calls[0].headers.Authorization, 'no duplicate auth header');
 		console.log('PASS project list mapping');
 	}
 
@@ -503,6 +505,36 @@ function mockRun(NodeClass, { params, calls, httpImpl, items }) {
 		const res = await node.methods.listSearch.searchWorkspaces.call(fakeThis, '');
 		assert.deepStrictEqual(res, { results: [] });
 		console.log('PASS listSearch failure fallback');
+	}
+
+	// --- Project list without a workspace fails fast with a clear message ---
+	{
+		const calls = [];
+		try {
+			await mockRun(NodeClass, {
+				params: { resource: 'project', operation: 'list', workspaceId: '', includeArchived: false },
+				calls,
+			});
+			throw new Error('expected throw');
+		} catch (e) {
+			assert.ok(/Select a Workspace/.test(e.message), 'workspace guard message, got: ' + e.message);
+			assert.strictEqual(calls.length, 0);
+		}
+		console.log('PASS project list workspace guard');
+	}
+
+	// --- mapApiErrorMessage: FORBIDDEN across n8n error shapes ---
+	{
+		const msgBody = gf.mapApiErrorMessage({ response: { body: { code: 'FORBIDDEN', message: 'Project is not public' } } });
+		assert.ok(/FORBIDDEN: Project is not public/.test(msgBody), 'body shape, got: ' + msgBody);
+		assert.ok(/must be public/.test(msgBody), 'public-board hint, got: ' + msgBody);
+		const msgData = gf.mapApiErrorMessage({ response: { data: { code: 'FORBIDDEN', message: 'Project is not public' } } });
+		assert.ok(/FORBIDDEN/.test(msgData), 'data shape, got: ' + msgData);
+		const msgBare = gf.mapApiErrorMessage({ statusCode: 403 });
+		assert.ok(/FORBIDDEN/.test(msgBare), 'bare 403, got: ' + msgBare);
+		const msgHtml = gf.mapApiErrorMessage({ statusCode: 403, response: { body: '<html><head><title>403 Forbidden</title></head><body>cloudflare challenge</body></html>' } });
+		assert.ok(/Cloudflare\/proxy/.test(msgHtml), 'proxy hint, got: ' + msgHtml);
+		console.log('PASS forbidden error mapping');
 	}
 
 	console.log('\nAll unit tests passed.');
