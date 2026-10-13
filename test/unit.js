@@ -249,6 +249,64 @@ function mockRun(NodeClass, { params, calls, httpImpl, items }) {
 		console.log('PASS label attach mapping');
 	}
 
+	// --- Label detach: pre-flight GET verifies task, then DELETE without a body ---
+	{
+		const calls = [];
+		await mockRun(NodeClass, {
+			params: { resource: 'label', operation: 'detach', labelId: 'l1', taskId: 't1' },
+			calls,
+			httpImpl: (options) => {
+				if (options.method === 'GET') return { id: 'l1', taskId: 't1' };
+				return { id: 'l1', taskId: null };
+			},
+		});
+		assert.strictEqual(calls[0].url, 'https://cloud.kaneo.app/api/label/l1');
+		assert.strictEqual(calls[1].url, 'https://cloud.kaneo.app/api/label/l1/task');
+		assert.strictEqual(calls[1].method, 'DELETE');
+		assert.strictEqual(calls[1].body, undefined, 'detach sends no task reference (API detaches from current task)');
+		console.log('PASS label detach mapping');
+	}
+
+	// --- Label detach: unassigned label fails fast before DELETE ---
+	{
+		const calls = [];
+		try {
+			await mockRun(NodeClass, {
+				params: { resource: 'label', operation: 'detach', labelId: 'l1', taskId: 't1' },
+				calls,
+				httpImpl: (options) => {
+					if (options.method === 'GET') return { id: 'l1', taskId: null };
+					return {};
+				},
+			});
+			throw new Error('expected throw');
+		} catch (e) {
+			assert.ok(/not assigned to a task/.test(e.message));
+			assert.strictEqual(calls.length, 1, 'no DELETE after failed guard');
+		}
+		console.log('PASS label detach unassigned guard');
+	}
+
+	// --- Label detach: task mismatch aborts before DELETE ---
+	{
+		const calls = [];
+		try {
+			await mockRun(NodeClass, {
+				params: { resource: 'label', operation: 'detach', labelId: 'l1', taskId: 't2' },
+				calls,
+				httpImpl: (options) => {
+					if (options.method === 'GET') return { id: 'l1', taskId: 't1' };
+					return {};
+				},
+			});
+			throw new Error('expected throw');
+		} catch (e) {
+			assert.ok(/attached to task "t1", not "t2"/.test(e.message));
+			assert.strictEqual(calls.length, 1, 'no DELETE after mismatch guard');
+		}
+		console.log('PASS label detach mismatch guard');
+	}
+
 	// --- Comment create ---
 	{
 		const calls = [];

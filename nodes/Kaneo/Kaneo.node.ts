@@ -534,9 +534,31 @@ async function executeLabel(
 				itemIndex,
 			);
 			break;
-		case 'detach':
-			push(returnData, await kaneoApiRequest(context, 'DELETE', `/label/${get('labelId')}/task`), itemIndex);
+		case 'detach': {
+			// DELETE /label/{id}/task takes no task reference: it detaches from the
+			// label's current task and returns 400 "Label is not assigned to a task"
+			// when label.taskId is empty. Pre-flight with GET so users get a clear,
+			// actionable error instead of the raw 400, and a task mismatch can never
+			// silently detach the wrong task.
+			const labelId = get('labelId') as string;
+			const taskId = get('taskId') as string;
+			const current = (await kaneoApiRequest(context, 'GET', `/label/${labelId}`)) as IDataObject;
+			const currentTaskId = current?.taskId as string | null | undefined;
+			if (!currentTaskId) {
+				throw new NodeOperationError(
+					context.getNode(),
+					`Label "${labelId}" is not assigned to a task (its taskId is empty), so there is nothing to detach. Attach it first with Label > Attach to Task.`,
+				);
+			}
+			if (currentTaskId !== taskId) {
+				throw new NodeOperationError(
+					context.getNode(),
+					`Label "${labelId}" is attached to task "${currentTaskId}", not "${taskId}". Detach was aborted so the wrong task is never affected.`,
+				);
+			}
+			push(returnData, await kaneoApiRequest(context, 'DELETE', `/label/${labelId}/task`), itemIndex);
 			break;
+		}
 		default:
 			throw new NodeOperationError(context.getNode(), `Unsupported Label operation: ${operation}`);
 	}

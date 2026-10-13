@@ -31,7 +31,7 @@ Credential test calls `GET {base}/api/user/me`, which works on cloud and self-ho
 - **Project**: list, get, create, update, delete, archive, unarchive, move, reorder, get public board.
 - **Task**: board list, get, get by ticket ID (e.g. `KAN-12`), create, full update, field updates (title/status/priority/due date/assignee/description), delete, duplicate, move, bulk update, reorder, export, import.
 - **Column**: list, create, update, delete, reorder.
-- **Label**: list (workspace/task), get, create, update, delete, attach, detach. Large workspace deletes may return `202` — repeat until `200`.
+- **Label**: list (workspace/task), get, create, update, delete, attach, detach (detach takes a Task ID, verifies it against the label's current task, then calls the API — the API itself detaches from the current task with no task reference). Large workspace deletes may return `202` — repeat until `200`.
 - **Comment**: list, create, update, delete.
 - **Activity**: task feed, workspace feed, legacy comment create/update/delete, event create.
 - **Time Entry**: list by task, get, create, update (set `endTime` to close a running timer).

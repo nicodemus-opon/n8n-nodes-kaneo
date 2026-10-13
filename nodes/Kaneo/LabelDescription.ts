@@ -13,7 +13,7 @@ export const labelOperations: INodeProperties[] = [
 			{ name: 'Attach to Task', value: 'attach', action: 'Attach a label to a task', description: 'Attach an existing label to a task' },
 			{ name: 'Create', value: 'create', action: 'Create a label', description: 'Create a label in a workspace' },
 			{ name: 'Delete', value: 'delete', action: 'Delete a label', description: 'Delete by ID; repeat on 202 until 200 for large cascades' },
-			{ name: 'Detach From Task', value: 'detach', action: 'Detach a label from a task', description: 'Detach a label from its current task' },
+			{ name: 'Detach From Task', value: 'detach', action: 'Detach a label from a task', description: "Detach a label from its current task (verified against the label's task first)" },
 			{ name: 'Get', value: 'get', action: 'Get a label', description: 'Get a label by ID' },
 			{ name: 'List Task Labels', value: 'listTask', action: 'List task labels', description: 'Labels attached to one task' },
 			{ name: 'List Workspace Labels', value: 'listWorkspace', action: 'List workspace labels', description: 'All labels in a workspace' },
@@ -44,8 +44,9 @@ export const labelFields: INodeProperties[] = [
 		type: 'string',
 		required: true,
 		default: '',
-		displayOptions: { show: { resource: ['label'], operation: ['listTask', 'attach'] } },
-		description: 'Task to list labels for, or to attach the label to',
+		displayOptions: { show: { resource: ['label'], operation: ['listTask', 'attach', 'detach'] } },
+		description:
+			'Task to list labels for, or to attach the label to. For detach it must match the label\u2019s current task (the API detaches from the current task and returns 400 otherwise).',
 	},
 	{
 		displayName: 'Name',
