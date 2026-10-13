@@ -1,6 +1,6 @@
 allowBuilds:
-  cpu-features: set this to true or false
-  eslint-plugin-n8n-nodes-base: set this to true or false
-  isolated-vm: set this to true or false
-  ssh2: set this to true or false
-  unrs-resolver: set this to true or false
+  cpu-features: true
+  eslint-plugin-n8n-nodes-base: true
+  isolated-vm: true
+  ssh2: true
+  unrs-resolver: true
